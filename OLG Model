@@ -23,6 +23,7 @@ class OLGModelClass:
         par.G_I = 0.10
         par.G_C = 0.10
         par.G_I_shock = 0.20
+        #par.G_C_shock = 0.20
         par.def_cap = 0.03
         par.shock_time = 70
         par.shock_duration = 50
@@ -77,11 +78,22 @@ class OLGModelClass:
             sim.C1[t] = max((1 - par.tau_w[t]) * sim.w[t] - s, 0)
             sim.C2[t+1] = max((1 + sim.r[t+1]) * s, 0)
             sim.S[t] = s * sim.w[t] * sim.L[t]
+
             sim.Y[t] = sim.A[t]**par.lambda_ * sim.K[t]**par.alpha * sim.L[t]**(1 - par.lambda_ - par.alpha)
+"""Investment shock:
             if par.shock_time <= t < par.shock_time + par.shock_duration:
                 sim.Ig[t] = max(par.G_I * sim.Y[t], par.G_I_shock * sim.Y[t])
             else:
                 sim.Ig[t] = par.G_I * sim.Y[t]
+
+"""Consumption shock:
+            if par.shock_time <= t < par.shock_time + par.shock_duration:
+                shock_duration = t - par.shock_time
+                sim.Cg[t] = max(par.G_C * sim.Y[t], par.G_C_shock * sim.Y[t]) 
+            else:
+                sim.Cg[t] = par.G_C * sim.Y[t] """
+
+
             sim.Cg[t] = par.G_C * sim.Y[t]
             sim.Xg[t] = sim.Cg[t] + sim.Ig[t]
             sim.G[t] = sim.Xg[t] + (1 + sim.rb[t]) * sim.B[t]
@@ -90,13 +102,16 @@ class OLGModelClass:
             par.tau_w[t] = sim.T[t] / (sim.w[t] * sim.L[t])
             sim.B[t+1] = sim.G[t] - sim.T[t]
             max_deficit = par.def_cap * sim.Y[t]
+
             if sim.B[t+1] > max_deficit:
                 reduction = sim.B[t+1] - max_deficit
                 sim.Cg[t] = max(sim.Cg[t] - reduction, 0)
                 sim.B[t+1] = max_deficit
+
             sim.Xg[t] = sim.Cg[t] + sim.Ig[t]
             sim.G[t] = sim.Xg[t] + (1 + sim.rb[t]) * sim.B[t]
             bond_demand = min(sim.B[t+1], sim.S[t])
+
             sim.s_b[t] = bond_demand / sim.S[t]
             sim.s_k[t] = 1 - sim.s_b[t]
             sim.S_k[t] = sim.s_k[t] * sim.S[t]
