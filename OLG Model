@@ -1,0 +1,121 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from types import SimpleNamespace
+from scipy import optimize
+
+class OLGModelClass:
+    def __init__(self, do_print=True):
+        self.par = SimpleNamespace()
+        self.sim = SimpleNamespace()
+        self.do_print = do_print
+        self.setup()
+        self.allocate()
+
+    def setup(self):
+        par = self.par
+        par.beta = 0.96
+        par.sigma = 1.0
+        par.alpha = 0.16
+        par.delta = 0.10
+        par.delta_A = 0.10
+        par.lambda_ = 0.33
+        par.n = 0.01
+        par.G_I = 0.10
+        par.G_C = 0.10
+        par.G_I_shock = 0.20
+        par.def_cap = 0.03
+        par.shock_time = 70
+        par.shock_duration = 50
+        par.K0 = 1.39
+        par.B0 = 0.0
+        par.L0 = 1.0
+        par.A0 = 0.91
+        par.simT = 200
+        par.tau_w = np.zeros(par.simT)
+        par.tau_w[0] = 0.39
+        par.tau_max = 0.50
+
+    def allocate(self):
+        sim = self.sim
+        par = self.par
+        attributes = [
+            "C1", "C2", "S", "K", "B", "Y", "L", "A", "S_k", "S_b", "r", "rk", "rb", "w", 
+            "T", "Ig", "Cg", "Xg", "G", "s_b", "s_k", "rents", "y", "k", "b", "g", "x", 
+            "i", "t", "a", "s", "cg", "tot_s_k"
+        ]
+        for attr in attributes:
+            setattr(sim, attr, np.zeros(par.simT))
+        sim.K[0] = par.K0
+        sim.B[0] = par.B0
+        sim.L[0] = par.L0
+        sim.A[0] = par.A0
+
+    def euler_error(self, s, par, sim, t):
+        C1 = max((1 - par.tau_w[t]) * sim.w[t] - s, 1e-6)
+        C2 = max((1 + sim.r[t+1]) * s, 1e-6)
+        LHS = C1**(-par.sigma)
+        RHS = par.beta * (1 + sim.r[t+1]) * C2**(-par.sigma)
+        return LHS - RHS
+
+    def simulate_with_diminishing_tech(self):
+        par = self.par
+        sim = self.sim
+        for t in range(par.simT - 1):
+            sim.w[t] = (1 - par.lambda_ - par.alpha) * sim.A[t]**par.lambda_ * (sim.K[t]**par.alpha) * (sim.L[t]**(-par.lambda_ - par.alpha))
+            sim.rk[t] = par.alpha * sim.A[t]**par.lambda_ * (sim.K[t]**(par.alpha - 1)) * (sim.L[t]**(1 - par.lambda_ - par.alpha))
+            sim.r[t] = (sim.rk[t] - par.delta)
+            try:
+                result = optimize.root_scalar(
+                    self.euler_error,
+                    args=(par, sim, t),
+                    bracket=[0.01, 0.99 * (1 - par.tau_w[t]) * sim.w[t]],
+                    method='bisect'
+                )
+                s = result.root
+            except ValueError:
+                s = 0.01
+            sim.C1[t] = max((1 - par.tau_w[t]) * sim.w[t] - s, 0)
+            sim.C2[t+1] = max((1 + sim.r[t+1]) * s, 0)
+            sim.S[t] = s * sim.w[t] * sim.L[t]
+            sim.Y[t] = sim.A[t]**par.lambda_ * sim.K[t]**par.alpha * sim.L[t]**(1 - par.lambda_ - par.alpha)
+            if par.shock_time <= t < par.shock_time + par.shock_duration:
+                sim.Ig[t] = max(par.G_I * sim.Y[t], par.G_I_shock * sim.Y[t])
+            else:
+                sim.Ig[t] = par.G_I * sim.Y[t]
+            sim.Cg[t] = par.G_C * sim.Y[t]
+            sim.Xg[t] = sim.Cg[t] + sim.Ig[t]
+            sim.G[t] = sim.Xg[t] + (1 + sim.rb[t]) * sim.B[t]
+            tax_cap = par.tau_max
+            sim.T[t] = min(sim.G[t], sim.w[t] * sim.L[t] * tax_cap)
+            par.tau_w[t] = sim.T[t] / (sim.w[t] * sim.L[t])
+            sim.B[t+1] = sim.G[t] - sim.T[t]
+            max_deficit = par.def_cap * sim.Y[t]
+            if sim.B[t+1] > max_deficit:
+                reduction = sim.B[t+1] - max_deficit
+                sim.Cg[t] = max(sim.Cg[t] - reduction, 0)
+                sim.B[t+1] = max_deficit
+            sim.Xg[t] = sim.Cg[t] + sim.Ig[t]
+            sim.G[t] = sim.Xg[t] + (1 + sim.rb[t]) * sim.B[t]
+            bond_demand = min(sim.B[t+1], sim.S[t])
+            sim.s_b[t] = bond_demand / sim.S[t]
+            sim.s_k[t] = 1 - sim.s_b[t]
+            sim.S_k[t] = sim.s_k[t] * sim.S[t]
+            sim.S_b[t] = sim.s_b[t] * sim.S[t]
+            sim.K[t+1] = (1 - par.delta) * sim.K[t] + sim.S_k[t]
+            sim.L[t+1] = (1 + par.n) * sim.L[t]
+            sim.A[t+1] = (1 - par.delta_A) * sim.A[t] + sim.Ig[t]
+            sim.b[t+1] = sim.B[t+1] / (sim.Y[t] + 1e-6)
+            sim.y[t] = sim.Y[t] / sim.Y[t]
+            sim.k[t] = sim.K[t] / sim.Y[t]
+            sim.b[t] = sim.B[t] / (sim.Y[t] + 1e-6)
+            sim.g[t] = sim.G[t] / (sim.Y[t] + 1e-6)
+            sim.x[t] = sim.Xg[t] / (sim.Y[t] + 1e-6)
+            sim.i[t] = sim.Ig[t] / (sim.Y[t] + 1e-6)
+            sim.t[t] = sim.T[t] / (sim.Y[t] + 1e-6)
+            sim.a[t] = sim.A[t] / (sim.Y[t] + 1e-6)
+            sim.cg[t] = sim.Cg[t] / (sim.Y[t] + 1e-6)
+            sim.tot_s_k[t] = sim.S_k[t] / (sim.Y[t] + 1e-6)
+
+olg_model = OLGModelClass()
+olg_model.simulate_with_diminishing_tech()
+olg_model.plot_extended_results()
