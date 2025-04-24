@@ -131,6 +131,60 @@ class OLGModelClass:
             sim.cg[t] = sim.Cg[t] / (sim.Y[t] + 1e-6)
             sim.tot_s_k[t] = sim.S_k[t] / (sim.Y[t] + 1e-6)
 
+  def plot_extended_results(self):
+        par = self.par
+        sim = self.sim
+        T = range(par.simT - 1)
+
+        fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+
+        axes[0, 0].plot(T, sim.k[:-1], label="k_t", color="red")
+        axes[0, 0].plot(T, sim.y[:-1], label="y_t", color="orange")
+        axes[0, 0].plot(T, sim.b[:-1], label="b_t", color="green")
+        axes[0, 0].plot(T, sim.a[:-1], label="a_t", color="purple")
+        axes[0, 0].set_title("Panel A: Kapital, output, Gæld og Infrastruktur pr. output")
+        axes[0, 0].set_xlabel("Tid")
+        axes[0, 0].set_ylabel("Andel af output")
+        axes[0, 0].legend()
+
+        axes[0, 1].plot(T, sim.r[:-1], label="r_t", color="red")
+        axes[0, 1].plot(T, par.tau_w[:-1], label="tau_w", color="blue", linestyle="--")
+        axes[0, 1].plot(T, sim.w[:-1], label="w_t", color="brown", linestyle="--")
+        axes[0, 1].set_title("Panel B: Rente, Løn og Skattesats")
+        axes[0, 1].set_xlabel("Tid")
+        axes[0, 1].set_ylabel("Værdier")
+        axes[0, 1].legend()
+
+        axes[1, 0].plot(T, sim.i[:-1], label="i_t", color="orange", linestyle="--")
+        axes[1, 0].plot(T, sim.cg[:-1], label="cg_t", color="blue", linestyle="--")
+        axes[1, 0].plot(T, sim.t[:-1], label="t_t", color="red")
+        axes[1, 0].plot(T, sim.g[:-1], label="g_t", color="purple", linestyle="--")
+        axes[1, 0].plot(T, sim.b[:-1], label="b_t", color="green")
+        axes[1, 0].set_title("Panel C: Offentlige Udgifter og Skatter pr. output")
+        axes[1, 0].set_xlabel("Tid")
+        axes[1, 0].set_ylabel("Andel af output")
+        axes[1, 0].legend()
+
+        axes[1, 1].plot(T, sim.C1[:-1], label="c1_t", color="blue")
+        axes[1, 1].plot(T, sim.C2[:-1], label="c2_t", color="orange")
+        axes[1, 1].plot(T, sim.s_b[:-1], label="s_b_t", color="green", linestyle="--")
+        axes[1, 1].plot(T, sim.s_k[:-1], label="s_k_t", color="purple", linestyle=":")
+        axes[1, 1].set_title("Panel D: Forbrug og Opsparingsrater")
+        axes[1, 1].set_xlabel("Tid")
+        axes[1, 1].set_ylabel("Værdier")
+        axes[1, 1].legend()
+
+        save_path = "/Users/peterbarfoed/Desktop/olg_infra_elas.png"
+        plt.savefig(save_path)
+        print(f"Plot saved to {save_path}")
+        print(f"{'T':<3}{'G[t]':<8}{'T[t]':<8}{'B[t+1]':<8}{'r_t':<8}{'Y_t':<8}{'K_t':<8}{'tau':<8}{'rents':<8}")
+        print("-" * 90)
+        for t in range(65, 125):
+            print(f"{t:<3}{sim.G[t]:<8.2f}{sim.T[t]:<8.2f}{sim.B[t+1]:<8.2f}{sim.r[t]:<8.2f}{sim.Y[t]:<8.2f}{sim.K[t]:<8.2f}{par.tau_w[t]:<8.2f}{sim.rents[t]:<8.2f}")
+        plt.tight_layout()
+        plt.show()
+
+
 olg_model = OLGModelClass()
 olg_model.simulate_with_diminishing_tech()
 olg_model.plot_extended_results()
